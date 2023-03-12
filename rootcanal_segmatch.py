@@ -76,17 +76,20 @@ def MinMaxZ(img):
 
 
 def Process(path):
+    #os.chdir(path)
     imgO = getOriginalFiles(path)
     bins = binMixedMap(path)
 
+    target_path = 'fogak/segmentation/'
+
     for i in range(len(bins)):
         if (MinMaxZ(bins[i]) > 0):
-            cv2.imwrite(path + "_" + str(i) + "_" + "binary.png", bins[i])
-            cv2.imwrite(path + "_" + str(i) + "_" + "original.png", imgO[i])
+            cv2.imwrite(target_path + "CBCT 201307231443" + "_" + str(i) + "_" + "binary.png", bins[i])
+            cv2.imwrite(target_path + "CBCT 201307231443" + "_" + str(i) + "_" + "original.png", imgO[i])
 
-    cv2.imshow('MixedMap', bins[140])
-    cv2.imshow('Original', imgO[140])
-    cv2.waitKey(0)
+    #cv2.imshow('MixedMap', bins[140])
+    #cv2.imshow('Original', imgO[140])
+    #cv2.waitKey(0)
 
 
 Process(path)
