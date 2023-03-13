@@ -53,7 +53,7 @@ def gradient(path):
     imgs = GammaTransform(path, 0.1)
     imgsGrad = []
     for img in imgs:
-        laplacian = cv2.Laplacian(img, cv2.CV_64F, 10)
+        laplacian = cv2.Laplacian(img, cv2.CV_8UC1, 10)
         imgsGrad.append(laplacian)
     return imgsGrad
 
@@ -64,15 +64,28 @@ def binMixedMap(path):
     n = neighbourAvg(path)
     mixedmap = []
     for img in range(len(f)):
-        ret, img_temp = cv2.threshold(f[img] + g[img] + n[img], 0, 255, cv2.THRESH_BINARY)
+        img_temp_ = f[img] + g[img] + n[img]
+        ret, img_temp = cv2.threshold(img_temp_, 0, 255, cv2.THRESH_BINARY)
         mixedmap.append(img_temp)
-
     return mixedmap
 
 
 def MinMaxZ(img):
     avg = np.average(np.array(img).flatten())
     return avg
+
+
+def ConvexHull(img):
+    contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Konvex burkok rajzolása a képre
+    convex_hulls = []
+    for contour in contours:
+        convex_hull = cv2.convexHull(contour)
+        convex_hulls.append(convex_hull)
+        cv2.drawContours(img, [convex_hull], 0, (255, 255, 255), 4)
+
+    return img
 
 
 def Process(path):
@@ -82,14 +95,18 @@ def Process(path):
 
     target_path = 'fogak/segmentation/'
 
+    closeBins = []
+    for img in bins:
+        closeBins.append(ConvexHull(img))
+
     for i in range(len(bins)):
         if (MinMaxZ(bins[i]) > 0):
-            cv2.imwrite(target_path + "CBCT 201307231443" + "_" + str(i) + "_" + "binary.png", bins[i])
-            cv2.imwrite(target_path + "CBCT 201307231443" + "_" + str(i) + "_" + "original.png", imgO[i])
+            cv2.imwrite(target_path + 'binary/' + "CBCT 201307231443" + "_" + str(i) + "_" + "binary.png", closeBins[i])
+            cv2.imwrite(target_path + 'original/' + "CBCT 201307231443" + "_" + str(i) + "_" + "original.png", imgO[i])
 
-    #cv2.imshow('MixedMap', bins[140])
-    #cv2.imshow('Original', imgO[140])
-    #cv2.waitKey(0)
+    cv2.imshow('MixedMap', bins[85])
+    cv2.imshow('Original', imgO[85])
+    cv2.waitKey(0)
 
 
 Process(path)
