@@ -83,10 +83,33 @@ def ConvexHull(img):
     for contour in contours:
         convex_hull = cv2.convexHull(contour)
         convex_hulls.append(convex_hull)
-        cv2.drawContours(img, [convex_hull], 0, (255, 255, 255), 4)
+        cv2.drawContours(img, [convex_hull], 0, (255, 255, 255), 8)
 
     return img
 
+def floodfill(img):
+    for x in range(img.shape[1]):
+        # Fill dark top pixels:
+        if img[0, x] == 0:
+            cv2.floodFill(img, None, seedPoint=(x, 0), newVal=255, loDiff=3,
+                          upDiff=3)  # Fill the background with white color
+
+        # Fill dark bottom pixels:
+        if img[-1, x] == 0:
+            cv2.floodFill(img, None, seedPoint=(x, img.shape[0] - 1), newVal=255, loDiff=3,
+                          upDiff=3)  # Fill the background with white color
+
+    for y in range(img.shape[0]):
+        # Fill dark left side pixels:
+        if img[y, 0] == 0:
+            cv2.floodFill(img, None, seedPoint=(0, y), newVal=255, loDiff=3,
+                          upDiff=3)  # Fill the background with white color
+
+        # Fill dark right side pixels:
+        if img[y, -1] == 0:
+            cv2.floodFill(img, None, seedPoint=(img.shape[1] - 1, y), newVal=255, loDiff=3,
+                          upDiff=3)  # Fill the background with white color
+    return img
 
 def Process(path):
     #os.chdir(path)
@@ -95,17 +118,22 @@ def Process(path):
 
     target_path = 'fogak/segmentation/'
 
+    '''
     closeBins = []
     for img in bins:
         closeBins.append(ConvexHull(img))
+    '''
 
     for i in range(len(bins)):
         if (MinMaxZ(bins[i]) > 0):
-            cv2.imwrite(target_path + 'binary/' + "CBCT 201307231443" + "_" + str(i) + "_" + "binary.png", closeBins[i])
+            cv2.imwrite(target_path + 'binary/' + "CBCT 201307231443" + "_" + str(i) + "_" + "binary.png", bins[i])
             cv2.imwrite(target_path + 'original/' + "CBCT 201307231443" + "_" + str(i) + "_" + "original.png", imgO[i])
+            cv2.imwrite(target_path + 'inverse/' + "CBCT 201307231443" + "_" + str(i) + "_" + "inverse.png", cv2.bitwise_not(floodfill(bins[i])))
 
-    cv2.imshow('MixedMap', bins[85])
-    cv2.imshow('Original', imgO[85])
+    cv2.imshow('MixedMap', bins[182])
+    cv2.imshow('FloodFill', cv2.bitwise_not(floodfill(bins[182])))
+    cv2.imshow('Original', imgO[182])
+    floodfill(bins[85])
     cv2.waitKey(0)
 
 
