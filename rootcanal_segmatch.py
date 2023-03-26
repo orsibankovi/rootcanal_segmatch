@@ -7,11 +7,6 @@ import numpy as np
 # import pandas as pd
 from tqdm import tqdm
 
-path = 'fogak/CBCT 201307231443'
-
-dfrows = []
-
-
 def getOriginalFiles(path):
     filenames = list(os.listdir(path))
     png_filenames = list(filter(lambda x: x.endswith(".png"), filenames))
@@ -75,17 +70,22 @@ def MinMaxZ(img):
     return avg
 
 
-def ConvexHull(img):
-    contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
+def ConvexHull(img, contour):
     # Konvex burkok rajzolása a képre
-    convex_hulls = []
-    for contour in contours:
+    if not cv2.isContourConvex(contour):
         convex_hull = cv2.convexHull(contour)
-        convex_hulls.append(convex_hull)
-        cv2.drawContours(img, [convex_hull], 0, (255, 255, 255), 8)
+        cv2.drawContours(img, [convex_hull], 0, (255, 255, 255), 0)
 
     return img
+
+def NumberOfHoles(img):
+    contours, hierarchy = cv2.findContours(img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    for c, h in zip(contours, hierarchy[0]):
+        # If there is at least one interior contour, find out how many there are
+        if h[2] == -1:
+            img = ConvexHull(img, c)
+    return img
+
 
 def floodfill(img):
     for x in range(img.shape[1]):
@@ -111,30 +111,75 @@ def floodfill(img):
                           upDiff=3)  # Fill the background with white color
     return img
 
+def OriginalWithRootCanal(path):
+    pathOriginal = path + '/axis/eredeti'
+    filenames = list(os.listdir(pathOriginal))
+    png_filenames = list(filter(lambda x: x.endswith(".png"), filenames))
+    sorted_filenames = natsorted(png_filenames)
+    imgs = []
+    for imgfile in sorted_filenames:
+        img_temp = cv2.imread(pathOriginal + '/' + imgfile, cv2.IMREAD_GRAYSCALE)
+        imgs.append(img_temp)
+    return imgs
+
+
+def matchOriginal(imgsRootCanal, imgs):
+    diffs = []
+    for i in range(len(imgs)):
+        diff = np.average((imgsRootCanal-imgs[i])**2)
+        diffs.append(diff)
+    m = np.array(diffs)
+    return m
+
+def writeMins(path, start, l):
+    p = path + "/axis/range.txt"
+    with open(str(p), "w") as f:
+        f.write(str(start) + " " + str(l) + "\n")
+
+def calcStart(E):
+    b = E.shape[0]
+    n = E.shape[1]
+    ss = []
+    for i in range(n-b+1):
+        ss.append(np.trace(E, i))
+    a = np.array(ss)
+    m = np.argmin(a)
+    return m
+
+
 def Process(path):
-    #os.chdir(path)
+    os.chdir(path)
     imgO = getOriginalFiles(path)
     bins = binMixedMap(path)
+    imgRoot = OriginalWithRootCanal(path)
 
-    target_path = 'fogak/segmentation/'
+    rows = []
+    for i in range(len(imgRoot)):
+        mi = matchOriginal(imgRoot[i], imgO)
+        rows.append(mi)
 
-    '''
-    closeBins = []
-    for img in bins:
-        closeBins.append(ConvexHull(img))
-    '''
+    E = np.array(rows)
+    s = calcStart(E)
 
-    for i in range(len(bins)):
-        if (MinMaxZ(bins[i]) > 0):
-            cv2.imwrite(target_path + 'binary/' + "CBCT 201307231443" + "_" + str(i) + "_" + "binary.png", bins[i])
-            cv2.imwrite(target_path + 'original/' + "CBCT 201307231443" + "_" + str(i) + "_" + "original.png", imgO[i])
-            cv2.imwrite(target_path + 'inverse/' + "CBCT 201307231443" + "_" + str(i) + "_" + "inverse.png", cv2.bitwise_not(floodfill(bins[i])))
+    writeMins(path, s, len(imgRoot))
+    print(s-1)
+    print(len(imgRoot))
 
-    cv2.imshow('MixedMap', bins[182])
-    cv2.imshow('FloodFill', cv2.bitwise_not(floodfill(bins[182])))
-    cv2.imshow('Original', imgO[182])
-    floodfill(bins[85])
+    target_path = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/segmentation/'
+    os.chdir(target_path)
+
+    for i in range(s-1, s+len(imgRoot)):
+        print(i)
+        cv2.imwrite(target_path + 'binary/' + "CBCT 201307231443" + "_" + str(i) + "_" + "binary.png", NumberOfHoles(bins[i]))
+        cv2.imwrite(target_path + 'original/' + "CBCT 201307231443" + "_" + str(i) + "_" + "original.png", imgO[i])
+        cv2.imwrite(target_path + 'inverse/' + "CBCT 201307231443" + "_" + str(i) + "_" + "rootcanal.png", cv2.bitwise_not(floodfill(bins[i])))
+
+    cv2.imshow('MixedMap', NumberOfHoles(bins[80]))
+    cv2.imshow('Original', imgO[80])
+    cv2.imshow('FloodFill', cv2.bitwise_not(floodfill(bins[80])))
     cv2.waitKey(0)
 
 
-Process(path)
+if __name__ == '__main__':
+    path = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/CBCT 201307231443/'
+    Process(path)
