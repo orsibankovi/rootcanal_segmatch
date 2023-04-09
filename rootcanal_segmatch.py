@@ -1,62 +1,61 @@
 import cv2
 from natsort import natsorted
-# import sys
-# mport pathlib
 import os
 import numpy as np
-# import pandas as pd
-from tqdm import tqdm
 
-def getOriginalFiles(path):
-    filenames = list(os.listdir(path))
-    png_filenames = list(filter(lambda x: x.endswith(".png"), filenames))
+
+def getoriginalfiles(path):
+    files_ = os.listdir(path)
+    filenames = list(files_)
+    filtered = filter(lambda x: x.endswith(".png"), filenames)
+    png_filenames = list(filtered)
     sorted_filenames = natsorted(png_filenames)
-    imgs = []
-    for imgfile in sorted_filenames:
-        img_temp = cv2.imread(path + '/' + imgfile, cv2.IMREAD_GRAYSCALE)
-        imgs.append(img_temp)
-    return imgs
+    images = []
+    for png_files in sorted_filenames:
+        img_temp = cv2.imread(path + '/' + png_files, cv2.IMREAD_GRAYSCALE)
+        images.append(img_temp)
+    return images
 
 
-def GammaTransform(path, gamma):
-    imgs = getOriginalFiles(path)
-    imgGamma = []
+def gammatransform(path, gamma):
+    images = getoriginalfiles(path)
+    img_gamma = []
     # gamma = 0.16  # set!!
-    invGamma = 1.0 / gamma
+    inv_gamma = 1.0 / gamma
 
-    for img in imgs:
-        table = [((i / 255) ** invGamma) * 255 for i in range(256)]
+    for img in images:
+        table = [((j / 255) ** inv_gamma) * 255 for j in range(256)]
         table = np.array(table, np.uint8)
         gamma = cv2.LUT(img, table)
-        imgGamma.append(gamma)
+        img_gamma.append(gamma)
 
-    return imgGamma
+    return img_gamma
 
 
-def neighbourAvg(path):
-    ksize = (4, 4)
-    imgs = GammaTransform(path, 0.12)
-    imgsAvg = []
-    for img in imgs:
-        blur = cv2.blur(img, ksize)
-        imgsAvg.append(blur)
+def neighbour_avg(path):
+    k_size = (2, 2)
+    images = gammatransform(path, 0.12)
+    images_avg = []
+    for img in images:
+        blur = cv2.blur(img, k_size)
+        images_avg.append(blur)
 
-    return imgsAvg
+    return images_avg
 
 
 def gradient(path):
-    imgs = GammaTransform(path, 0.1)
-    imgsGrad = []
-    for img in imgs:
+    images = gammatransform(path, 0.1)
+    images_grad = []
+    for img in images:
         laplacian = cv2.Laplacian(img, cv2.CV_8UC1, 10)
-        imgsGrad.append(laplacian)
-    return imgsGrad
+        images_grad.append(laplacian)
+    return images_grad
 
 
-def binMixedMap(path):
-    f = GammaTransform(path, 0.2)
+def bin_mixedmap(path):
+    f = gammatransform(path, 0.2)
     g = gradient(path)
-    n = neighbourAvg(path)
+    n = neighbour_avg(path)
     mixedmap = []
     for img in range(len(f)):
         img_temp_ = f[img] + g[img] + n[img]
@@ -65,25 +64,22 @@ def binMixedMap(path):
     return mixedmap
 
 
-def MinMaxZ(img):
-    avg = np.average(np.array(img).flatten())
-    return avg
-
-
-def ConvexHull(img, contour):
-    # Konvex burkok rajzolása a képre
+def convexhull(img, contour):
     if not cv2.isContourConvex(contour):
         convex_hull = cv2.convexHull(contour)
         cv2.drawContours(img, [convex_hull], 0, (255, 255, 255), 0)
 
     return img
 
-def NumberOfHoles(img):
+
+def number_of_holes(img):
     contours, hierarchy = cv2.findContours(img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-    for c, h in zip(contours, hierarchy[0]):
-        # If there is at least one interior contour, find out how many there are
-        if h[2] == -1:
-            img = ConvexHull(img, c)
+    # print(type(hierarchy))
+    if type(hierarchy) == 'numpy.ndarray':
+        for c, h in zip(contours, hierarchy[0]):
+            # If there is at least one interior contour, find out how many there are
+            if h[2] == -1:
+                img = convexhull(img, c)
     return img
 
 
@@ -111,75 +107,90 @@ def floodfill(img):
                           upDiff=3)  # Fill the background with white color
     return img
 
-def OriginalWithRootCanal(path):
-    pathOriginal = path + '/axis/eredeti'
-    filenames = list(os.listdir(pathOriginal))
+
+def original_with_root_canal(path):
+    path_original = path + '/axis/eredeti'
+    filenames = list(os.listdir(path_original))
     png_filenames = list(filter(lambda x: x.endswith(".png"), filenames))
     sorted_filenames = natsorted(png_filenames)
-    imgs = []
-    for imgfile in sorted_filenames:
-        img_temp = cv2.imread(pathOriginal + '/' + imgfile, cv2.IMREAD_GRAYSCALE)
-        imgs.append(img_temp)
-    return imgs
+    images = []
+    for image_file in sorted_filenames:
+        img_temp = cv2.imread(path_original + '/' + image_file, cv2.IMREAD_GRAYSCALE)
+        images.append(img_temp)
+    return images
 
 
-def matchOriginal(imgsRootCanal, imgs):
+def match_original(images_rootcanal, images):
     diffs = []
-    for i in range(len(imgs)):
-        diff = np.average((imgsRootCanal-imgs[i])**2)
+    for j in range(len(images)):
+        diff = np.average((images_rootcanal - images[j]) ** 2)
         diffs.append(diff)
     m = np.array(diffs)
     return m
 
-def writeMins(path, start, l):
+
+def write_min(path, start, l):
     p = path + "/axis/range.txt"
     with open(str(p), "w") as f:
         f.write(str(start) + " " + str(l) + "\n")
 
-def calcStart(E):
-    b = E.shape[0]
-    n = E.shape[1]
+
+def calculate_start(e):
+    b, n = e.shape
     ss = []
-    for i in range(n-b+1):
-        ss.append(np.trace(E, i))
+    for j in range(n - b + 1):
+        ss.append(np.trace(e, j))
     a = np.array(ss)
     m = np.argmin(a)
     return m
 
 
-def Process(path):
+def process(path, name):
     os.chdir(path)
-    imgO = getOriginalFiles(path)
-    bins = binMixedMap(path)
-    imgRoot = OriginalWithRootCanal(path)
+    original_images = getoriginalfiles(path)
+    bins = bin_mixedmap(path)
+    img_root = original_with_root_canal(path)
 
     rows = []
-    for i in range(len(imgRoot)):
-        mi = matchOriginal(imgRoot[i], imgO)
+    for j in range(len(img_root)):
+        mi = match_original(img_root[j], original_images)
         rows.append(mi)
 
     E = np.array(rows)
-    s = calcStart(E)
+    s = calculate_start(E)
 
-    writeMins(path, s, len(imgRoot))
-    print(s-1)
-    print(len(imgRoot))
+    write_min(path, s, len(img_root))
+    print(s - 1)
+    print(len(img_root))
 
     target_path = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/segmentation/'
     os.chdir(target_path)
 
-    for i in range(s-1, s+len(imgRoot)):
-        print(i)
-        cv2.imwrite(target_path + 'binary/' + "CBCT 201307231443" + "_" + str(i) + "_" + "binary.png", NumberOfHoles(bins[i]))
-        cv2.imwrite(target_path + 'original/' + "CBCT 201307231443" + "_" + str(i) + "_" + "original.png", imgO[i])
-        cv2.imwrite(target_path + 'inverse/' + "CBCT 201307231443" + "_" + str(i) + "_" + "rootcanal.png", cv2.bitwise_not(floodfill(bins[i])))
+    for j in range(len(original_images)):
+        cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
+        if s-1 < j < s + len(img_root)-1:
+            cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(bins[j]))
+            cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png",
+                    cv2.bitwise_not(floodfill(bins[j])))
+        else:
+            black = np.zeros(original_images[j].shape, dtype=np.uint8)
+            cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", black)
+            cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", black)
 
-    cv2.imshow('MixedMap', NumberOfHoles(bins[80]))
-    cv2.imshow('Original', imgO[80])
-    cv2.imshow('FloodFill', cv2.bitwise_not(floodfill(bins[80])))
-    cv2.waitKey(0)
+    # cv2.imshow('MixedMap', NumberOfHoles(bins[146]))
+    # cv2.imshow('Original', original_images[146])
+    # cv2.imshow('FloodFill', cv2.bitwise_not(floodfill(bins[146])))
+    # cv2.waitKey(0)
 
 
 if __name__ == '__main__':
-    path = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/CBCT 201307231443/'
-    Process(path)
+    rootdir = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/'
+
+    dirs = [[]]
+    for subdir, dir_, files in os.walk(rootdir):
+        dirs.append(dir_)
+    # print(dirs[1])
+    for i in dirs[1]:
+        if i != 'segmentation':
+            Path = rootdir + '/' + i + '/'
+            process(Path, i)
