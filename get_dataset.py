@@ -1,5 +1,5 @@
 import os
-
+import unet
 import rootcanal_segmatch
 import torch
 import cv2
@@ -35,9 +35,16 @@ class GetDataset(Dataset):
         return len(self.input_images)
 
 
-dataset = GetDataset()
-i = dataset.__len__()
+trainset = GetDataset()
+i = trainset.__len__()
 print(i)
-x, y = dataset.__getitem__(100)
+x, y = trainset.__getitem__(100)
 print(x)
 print(y)
+
+n_epochs = 3
+batch_size_train = 64
+
+train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size_train, shuffle=True)
+
+net = unet.UNet()
