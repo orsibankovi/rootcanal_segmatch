@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+import torch.optim as optim
+from get_dataset import GetDataset as dataset
+import matplotlib.pyplot as plt
 
 class DoubleConv(nn.Module):
     """(Convolution => [BN] => ReLU) * 2"""
@@ -50,8 +53,7 @@ class Up(nn.Module):
         diffY = x2.size()[2] - x1.size()[2]
         diffX = x2.size()[3] - x1.size()[3]
 
-        x1 = nn.functional.pad(x1, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2])
+        x1 = nn.functional.pad(x1, [diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2])
         # if you have padding issues, see
         # https://github.com/ncullen93/pytorch-roi-align/issues/36
         x = torch.cat([x2, x1], dim=1)
@@ -78,3 +80,63 @@ class UNet(nn.Module):
     def forward(self, x):
         x1 = self.inc(x)
         x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x = self.up1(x5, x4)
+        x = self.up2(x, x3)
+        x = self.up3(x, x2)
+        x = self.up4(x, x1)
+        x = self.outc(x)
+        return x
+
+
+if __name__ == '__main__':
+    trainset = dataset()
+    i = trainset.__len__()
+    print(i)
+    x, y = trainset.__getitem__(80)
+    print(x)
+    print(y)
+
+    dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(dev)
+
+    n_epochs = 1
+    batch_size_train = 64
+    log_interval = 10
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size_train, shuffle=True)
+    learning_rate = 0.001
+
+    net = UNet(1, 2)
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(net.parameters(), lr=learning_rate)
+    train_losses = []
+
+    net.train()  # set mode of the NN
+
+    for epoch in range(1, n_epochs + 1):  # hanyadik epochnal tartunk
+
+        for batch_idx, (data, target) in enumerate(train_loader):
+
+            data = data.to(dev).float()
+            target = target.to(dev)
+
+            optimizer.zero_grad()  # clear the gradient
+            output = net(data)  # forward propagation
+            loss = criterion(output, target)  # calculation loss
+            loss.backward()  # current loss
+            optimizer.step()
+
+            if batch_idx % log_interval == 0:
+                print('Train Epoch: ' + str(epoch)
+                      + " batch_idx: "
+                      + str(batch_idx)
+                      + "\tLoss: "
+                      + str(loss.item()))
+
+                train_losses.append(loss.item())
+
+
+    plt.plot(train_losses)
