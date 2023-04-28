@@ -11,23 +11,20 @@ class GetDataset(Dataset):
         self.input = os.listdir(self.path_input)
         self.input_names = list(filter(lambda x: x.endswith(".png"), list(self.input)))
         self.input_images = []
-        for images in self.input_names[0:100]:
-            img_temp = cv2.imread(self.path_input + '/' + images, cv2.IMREAD_GRAYSCALE)
-            img_temp = torch.from_numpy(img_temp.reshape((1, 501, 501))).int()
-            self.input_images.append(img_temp)
-        '''
         for images in self.input_names:
             img_temp = cv2.imread(self.path_input + '/' + images, cv2.IMREAD_GRAYSCALE)
-            img_temp = torch.from_numpy(img_temp.reshape((1, 501, 501))).int()
-            self.input_images.append(img_temp) 
-        '''
+            img_temp = cv2.resize(img_temp, (128, 128))
+            img_temp = torch.from_numpy(img_temp.reshape((1, 128, 128))/255).float()
+            self.input_images.append(img_temp)
+
         self.path_target = "C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/segmentation/inverse"
         self.target = os.listdir(self.path_target)
         self.target_names = list(filter(lambda x: x.endswith(".png"), list(self.target)))
         self.target_images = []
-        for images in self.target_names[0:100]:
+        for images in self.target_names:
             img_temp = cv2.imread(self.path_target + '/' + images, cv2.IMREAD_GRAYSCALE)
-            img_temp = torch.from_numpy(img_temp.reshape((1, 501, 501))).int()
+            img_temp = cv2.resize(img_temp, (128, 128))
+            img_temp = torch.from_numpy(img_temp.reshape((1, 128, 128))/255).float()
             self.target_images.append(img_temp)
 
     def __getitem__(self, index):

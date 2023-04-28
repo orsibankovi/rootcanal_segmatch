@@ -22,7 +22,19 @@ def dice_loss(output, target):
     return dice_loss_
 
 
+def unet_loss(output, target, weight=1.0):
+    sigmoid = nn.Sigmoid()
+    bce_loss = nn.BCELoss()  # Binary Cross Entropy (BCE)
+
+    # weighted sum of BCE and Dice Loss
+    # loss = weight * bce_loss(sigmoid(output), target) + (1 - weight) * dice_loss_value
+    loss = bce_loss(output, target)
+
+    return loss
+
+
 if __name__ == '__main__':
+    dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     dataset = ds.GetDataset()
     train_len = int(len(dataset) * 0.8)
     train_set, test_set = torch.utils.data.random_split(dataset, [train_len, len(dataset) - train_len])
@@ -35,7 +47,6 @@ if __name__ == '__main__':
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=16, shuffle=False)
 
     net = unet.UNet(1, 1)
-    dev = torch.device("cuda:0")
     net = net.to(dev)
     net = net.float()
 
@@ -49,13 +60,15 @@ if __name__ == '__main__':
     for epoch in range(1, n_epochs + 1):
 
         for batch_idx, (data, target) in enumerate(train_loader):
-
-            data = data.to(dev).float()
-            target = target.to(dev)
+            if dev == "cuda:0":
+                data = data.to(dev).float()
+                target = target.to(dev)
+            else:
+                data = data.float()
 
             optimizer.zero_grad()  # clear the gradient
             output = net(data)  # forward propagation
-            loss = nn.BCELoss(output, target)  # calculation loss
+            loss = unet_loss(output, target)  # calculation loss
             dice_loss_value = dice_loss(output, target)
             loss.backward()  # current loss
             optimizer.step()
@@ -83,14 +96,17 @@ if __name__ == '__main__':
 
     with torch.no_grad():
         for data, target in test_loader:
-            data = data.to(dev).float()
-            target = target.to(dev)
+            if dev == "cuda:0":
+                data = data.to(dev).float()
+                target = target.to(dev)
+            else:
+                data = data.float()
 
             output = net(data)
             dice_loss_value = dice_loss(output, target)
             valid_dice_losses.append(dice_loss_value.item())
 
-            if (count % 20 == 0):
+            if count % 20 == 0:
                 print('Valid Loss: ' + str(valid_dice_losses[-1]))
 
             torch.cuda.empty_cache()
