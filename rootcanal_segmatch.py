@@ -167,12 +167,13 @@ def process(path, name):
     os.chdir(target_path)
 
     for j in range(len(original_images)):
-        cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
         if s-1 < j < s + len(img_root)-1:
+            cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
             cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(bins[j]))
             cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png",
                     cv2.bitwise_not(floodfill(bins[j])))
-        else:
+        elif s - 50 < j < s + len(img_root) + 50:
+            cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
             black = np.zeros(original_images[j].shape, dtype=np.uint8)
             cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", black)
             cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", black)
