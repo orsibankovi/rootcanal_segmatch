@@ -1,7 +1,9 @@
 import os
 import cv2
 import torch
+import xlwt
 from torch.utils.data import Dataset
+import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
@@ -18,51 +20,35 @@ def dice_loss(output, target):
     intersection = (iflat * tflat).sum()
     a_sum = torch.sum(iflat * iflat)
     b_sum = torch.sum(tflat * tflat)
-    dice_loss_ = 1.0 - ((2.0 * intersection + smooth) / (a_sum + b_sum + smooth))
-    return dice_loss_
+    diceloss = 1.0 - ((2.0 * intersection + smooth) / (a_sum + b_sum + smooth))
+    return diceloss
 
-
-def unet_loss(output, target, weight=1.0):
-    sigmoid = nn.Sigmoid()
-    bce_loss = nn.BCELoss()  # Binary Cross Entropy (BCE)
-
-    # weighted sum of BCE and Dice Loss
-    # loss = weight * bce_loss(sigmoid(output), target) + (1 - weight) * dice_loss_value
-    loss = bce_loss(output, target)
-
+def unet_loss(output, target, weight=0.8):
+    bce_loss = nn.BCELoss() #Binary Cross Entropy (BCE)
+    dice_loss_value = dice_loss(output, target)
+    #weighted sum of BCE and Dice Loss
+    loss = weight * bce_loss(output, target) + (1 - weight) * dice_loss_value
+    #loss = bce_loss(sigmoid(output), target)
+    
     return loss
 
 
-if __name__ == '__main__':
-    dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    dataset = ds.GetDataset()
-    train_len = int(len(dataset) * 0.8)
-    train_set, test_set = torch.utils.data.random_split(dataset, [train_len, len(dataset) - train_len])
-
-    n_epochs = 1
-    batch_size_train = 1
+def train(device, n_epoch, batch_size, lr, trainset, net):
+    n_epochs = n_epoch
     log_interval = 100
-    learning_rate = 0.001
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=1, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=16, shuffle=False)
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
 
-    net = unet.UNet(1, 1)
-    net = net.to(dev)
-    net = net.float()
-
-    optimizer = optim.Adam(net.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(net.parameters(), lr=lr)
     train_losses = []
     dice_losses = []
 
-    #train
+    # train
     net.train()  # set mode of the NN
-
     for epoch in range(1, n_epochs + 1):
-
         for batch_idx, (data, target) in enumerate(train_loader):
-            if dev == "cuda:0":
-                data = data.to(dev).float()
-                target = target.to(dev)
+            if device == 'cuda:0':
+                data = data.to(device).float()
+                target = target.to(device)
             else:
                 data = data.float()
 
@@ -86,8 +72,21 @@ if __name__ == '__main__':
             torch.cuda.empty_cache()
 
     plt.plot(dice_losses)
+    plt.savefig('dice_losses.jpg')
+    plt.plot(train_losses)
+    plt.savefig('train_losses.jpg')
 
-    #test
+
+def test(device, batch_size, testset, net):
+    loc = ("C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1")
+    # To open Workbook
+    wb = xlwt.Workbook()
+    ws = wb.add_sheet('sheet')
+    ws.write(0, 0, 'Valid loss')
+    ws.write(0, 1, 'Value')
+
+    test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False)
+
     print('test' + '\n')
     valid_losses = []
     valid_dice_losses = []
@@ -96,17 +95,52 @@ if __name__ == '__main__':
 
     with torch.no_grad():
         for data, target in test_loader:
-            if dev == "cuda:0":
-                data = data.to(dev).float()
-                target = target.to(dev)
+            if device == 'cuda:0':
+                data = data.to(device).float()
+                target = target.to(device)
             else:
                 data = data.float()
 
             output = net(data)
+            loss = unet_loss(output, target)
             dice_loss_value = dice_loss(output, target)
+            valid_losses.append(loss.item())
             valid_dice_losses.append(dice_loss_value.item())
 
-            if count % 20 == 0:
-                print('Valid Loss: ' + str(valid_dice_losses[-1]))
+            if count % 5 == 0:
+                if count == 0:
+                    print('Valid Loss: ' + str(valid_dice_losses[0]))
+                else:
+                    print('Valid Loss: ' + str(np.average(valid_dice_losses[-5])))
+
+            ws.write(count + 1, 0, 'count =' + str(count))
+            ws.write(count + 1, 1, str(valid_dice_losses[-1]))
+
+            count += 1
 
             torch.cuda.empty_cache()
+
+    plt.plot(valid_dice_losses)
+    plt.plot(valid_losses)
+    plt.savefig('valid_losses.jpg')
+    plt.savefig('valid_dice_losses.jpg')
+    wb.save('valid_dice_losses.xls')
+
+
+if __name__ == '__main__':
+    dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(dev)
+    dataset = ds.GetDataset()
+    train_len = int(len(dataset) * 0.8)
+    train_set, test_set = torch.utils.data.random_split(dataset, [train_len, len(dataset) - train_len])
+
+    net = unet.UNet(1, 1)
+
+    if dev == 'cuda:0':
+        net = net.to(dev)
+    else:
+        net = net.float()
+
+    train(device=dev, n_epoch=2, batch_size=8, lr=0.001, trainset=train_set, net=net)
+    test(device=dev, batch_size=8, testset=test_set, net=net)
+
