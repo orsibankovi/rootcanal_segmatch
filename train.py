@@ -130,7 +130,7 @@ def test(device, batch_size, testset, net):
 if __name__ == '__main__':
     dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(dev)
-    dataset = ds.GetDataset()
+    dataset = ds.GetDataset(128)
     train_len = int(len(dataset) * 0.8)
     train_set, test_set = torch.utils.data.random_split(dataset, [train_len, len(dataset) - train_len])
 
