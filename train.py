@@ -23,11 +23,12 @@ def dice_loss(output, target):
     diceloss = 1.0 - ((2.0 * intersection + smooth) / (a_sum + b_sum + smooth))
     return diceloss
 
-def unet_loss(output, target, weight=0.8):
+def unet_loss(output, target, weight=1.0):
     bce_loss = nn.BCELoss() #Binary Cross Entropy (BCE)
+    bce_logit_loss = nn.BCEWithLogitsLoss()
     dice_loss_value = dice_loss(output, target)
     #weighted sum of BCE and Dice Loss
-    loss = weight * bce_loss(output, target) + (1 - weight) * dice_loss_value
+    loss = weight * bce_logit_loss(output, target) + (1 - weight) * dice_loss_value
     #loss = bce_loss(sigmoid(output), target)
     
     return loss
@@ -71,8 +72,10 @@ def train(device, n_epoch, batch_size, lr, trainset, net):
 
             torch.cuda.empty_cache()
 
+    plt.figure(1)
     plt.plot(dice_losses)
     plt.savefig('dice_losses.jpg')
+    plt.figure(2)
     plt.plot(train_losses)
     plt.savefig('train_losses.jpg')
 
@@ -120,9 +123,11 @@ def test(device, batch_size, testset, net):
 
             torch.cuda.empty_cache()
 
+    plt.figure(3)
     plt.plot(valid_dice_losses)
-    plt.plot(valid_losses)
     plt.savefig('valid_losses.jpg')
+    plt.figure(4)
+    plt.plot(valid_losses)
     plt.savefig('valid_dice_losses.jpg')
     wb.save('valid_dice_losses.xls')
 
