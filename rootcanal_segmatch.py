@@ -51,6 +51,16 @@ def gradient(path):
         images_grad.append(laplacian)
     return images_grad
 
+def getoriginalbinary(path):
+    path_binary = path + '/axis/binaris'
+    filenames = list(os.listdir(path_binary))
+    png_filenames = list(filter(lambda x: x.endswith(".png"), filenames))
+    sorted_filenames = natsorted(png_filenames)
+    images = []
+    for image_file in sorted_filenames:
+        img_temp = cv2.imread(path_binary + '/' + image_file, cv2.IMREAD_GRAYSCALE)
+        images.append(img_temp)
+    return images
 
 def bin_mixedmap(path):
     f = gammatransform(path, 0.2)
@@ -148,7 +158,8 @@ def calculate_start(e):
 def process(path, name):
     os.chdir(path)
     original_images = getoriginalfiles(path)
-    bins = bin_mixedmap(path)
+    # bins = bin_mixedmap(path)
+    binaris = getoriginalbinary(path)
     img_root = original_with_root_canal(path)
 
     rows = []
@@ -167,14 +178,16 @@ def process(path, name):
     os.chdir(target_path)
 
     for j in range(len(original_images)):
-        if s-1 < j < s + len(img_root)-1:
+        if s <= j < s + len(img_root):
             cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
-            cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(bins[j]))
-            cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png",
-                    cv2.bitwise_not(floodfill(bins[j])))
+            # cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(bins[j]))
+            # cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", cv2.bitwise_not(floodfill(bins[j])))
+            cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(binaris[j-s]))
+            cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", cv2.bitwise_not(floodfill(binaris[j-s])))
+
         elif s - 50 < j < s + len(img_root) + 50:
             cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
-            black = np.zeros(original_images[j].shape, dtype=np.uint8)
+            black = np.zeros(original_images[j].shape)
             cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", black)
             cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", black)
 
@@ -192,6 +205,6 @@ if __name__ == '__main__':
         dirs.append(dir_)
     # print(dirs[1])
     for i in dirs[1]:
-        if i != 'segmentation':
+        if i != 'segmentation_rootcanal_only' and i != 'segmentation':
             Path = rootdir + '/' + i + '/'
             process(Path, i)
