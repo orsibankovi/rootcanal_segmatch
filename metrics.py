@@ -66,7 +66,6 @@ def ROC_curve(output, target):
 
 
 def binary(output, threshold=0.5):
-    binary = output
     binary = output > threshold
 
     binary = binary.float()

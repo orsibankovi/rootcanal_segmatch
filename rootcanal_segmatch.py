@@ -174,7 +174,7 @@ def process(path, name):
     print(s - 1)
     print(len(img_root))
 
-    target_path = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/segmentation/'
+    target_path = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/segmentation_rootcanal_only/'
     os.chdir(target_path)
 
     for j in range(len(original_images)):
@@ -184,13 +184,13 @@ def process(path, name):
             # cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", cv2.bitwise_not(floodfill(bins[j])))
             cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(binaris[j-s]))
             cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", cv2.bitwise_not(floodfill(binaris[j-s])))
-
+'''
         elif s - 50 < j < s + len(img_root) + 50:
             cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
             black = np.zeros(original_images[j].shape)
             cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", black)
             cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", black)
-
+'''
     # cv2.imshow('MixedMap', NumberOfHoles(bins[146]))
     # cv2.imshow('Original', original_images[146])
     # cv2.imshow('FloodFill', cv2.bitwise_not(floodfill(bins[146])))
