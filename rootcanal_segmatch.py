@@ -174,7 +174,7 @@ def process(path, name):
     print(s - 1)
     print(len(img_root))
 
-    target_path = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/segmentation_rootcanal_only/'
+    target_path = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/segmentation_all/'
     os.chdir(target_path)
 
     for j in range(len(original_images)):
@@ -184,6 +184,12 @@ def process(path, name):
             # cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", cv2.bitwise_not(floodfill(bins[j])))
             cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(binaris[j-s]))
             cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", cv2.bitwise_not(floodfill(binaris[j-s])))
+
+        else:
+            cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
+            black = np.zeros(original_images[j].shape)
+            cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", black)
+            cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", black)
 '''
         elif s - 50 < j < s + len(img_root) + 50:
             cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
@@ -205,6 +211,6 @@ if __name__ == '__main__':
         dirs.append(dir_)
     # print(dirs[1])
     for i in dirs[1]:
-        if i != 'segmentation_rootcanal_only' and i != 'segmentation':
+        if i != 'segmentation_rootcanal_only' and i != 'segmentation' and i != 'segmentation_all':
             Path = rootdir + '/' + i + '/'
             process(Path, i)
