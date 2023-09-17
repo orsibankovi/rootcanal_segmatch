@@ -7,86 +7,159 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
-import get_dataset as ds
-import unet
-import metrics
+import torchmetrics
+import math
 
-def train(dev, n_epoch, batch_size, lr, trainset, validationset, net):
-    n_epochs = n_epoch
-    log_interval = 100
-    train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
-    validation_loader = torch.utils.data.DataLoader(validationset, batch_size=batch_size, shuffle=True)
 
-    criterion = nn.BCELoss()
-    optimizer = optim.Adam(net.parameters(), lr)
-    train_losses = []
-    dice_losses = []
-    jaccard_index = []
-    valid_train_losses = []
-    valid_dice_losses = []
-    valid_jaccard_index = []
+class Train():
+    def __init__(self, dev, n_epoch, batch_size, lr, trainset, validationset, net):
+        super(Train, self).__init__()
+        self.dev = dev
+        self.n_epoch = n_epoch
+        self.batch_size = batch_size
+        self.lr = lr
+        self.trainset = trainset
+        self.validationset = validationset
+        self.net = net
+        self.Dice = torchmetrics.Dice(zero_division=1.0, threshold=0.5).to(self.dev)
+        self.Jaccard = torchmetrics.JaccardIndex(task='binary', threshold=0.5).to(self.dev) 
+        self.criterion = nn.BCELoss().to(self.dev)
+        self.optimizer = optim.Adam(self.net.parameters(), self.lr)
+        
+    def plot_loss(self, train_loss, valid_loss, n_epochs, name, num):
+        plt.figure(num)
+        plt.plot([*range(0, n_epochs, 1)], train_loss)
+        plt.plot([*range(0, n_epochs, 1)], valid_loss)
+        plt.xlim((0, n_epochs))
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.savefig(name+'.jpg')
+        
+    def avg_loss_epoch(self, array, trainlen, batchsize, epochnum):
+        avg_array = []
+        for i in range(1,epochnum+1):
+            avg_array.append(np.average(array[(i-1)*int(trainlen):i*int(trainlen)]))
 
-    # train
-    for epoch in range(1, n_epochs + 1):
-        net.train(True)
+        return avg_array    
+        
+    def train(self):
+        log_interval = 500
+        train_loader = torch.utils.data.DataLoader(self.trainset, self.batch_size, shuffle=True)
+        val_losses = []
+        val_dice_losses = []
+        val_jaccard_index = []
+        self.net.train(True)
+        count = 0
+        wb = xlwt.Workbook()
+        ws = wb.add_sheet('Train')
+        ws.write(0, 0, 'Epoch')
+        ws.write(0, 1, 'Loss')
+        ws.write(0, 2, 'DiceLoss')
+        ws.write(0, 3, 'JaccardIndex')
+        ws1 = wb.add_sheet('validation')
+        ws1.write(0, 0, 'Epoch')
+        ws1.write(0, 1, 'Loss')
+        ws1.write(0, 2, 'DiceLoss')
+        ws1.write(0, 3, 'JaccardIndex')
 
-        for batch_idx, (data, target) in enumerate(train_loader):
-            if dev != "cpu":
-                data = data.to(dev)
-                target = target.to(dev)
+        # train
+        print('train')
+        for epoch in range(1, self.n_epoch + 1):
+            
+            train_losses = []
+            dice_losses = []
+            jaccard_index = []
+        
+            for batch_idx, (data, target) in enumerate(train_loader):
 
-            data = data.float()
+                if self.dev.type == 'cuda':
+                    data = data.to(self.dev)
+                    target = target.to(self.dev)
+                #data = data.float()
+            
+                self.optimizer.zero_grad()  # clear the gradient
 
-            optimizer.zero_grad()  # clear the gradient
-            output = net(data)  # forward propagation
-            loss = criterion(output, target)  # calculate loss
-            dice_loss_value, jaccard_value = metrics.binary_classification(output, target)
-            loss.backward()  # current loss
-            optimizer.step()  # update parameters
+                output = self.net(data)  # forward propagation
+                loss = self.criterion(output, target)  # calculate loss
+                
+                loss.backward()  # current loss
+                self.optimizer.step()  # update parameters
 
-            train_losses.append(loss.item())
-            dice_losses.append(dice_loss_value)
-            jaccard_index.append(jaccard_value)
+                dice_loss_value = self.Dice(output, target.int())
+                jaccard_value = self.Jaccard(output, target.int())
+                train_losses.append(loss.item())
+                dice_losses.append(dice_loss_value.item())
 
-            if batch_idx % log_interval == 0:
-                if batch_idx == 0:
-                    print('Train Epoch: ' + str(epoch)
-                          + " batch_idx: "
-                          + str(batch_idx)
-                          + "\tLoss: "
-                          + str(round(loss.item(), 8))
-                          + "\tDiceLoss: "
-                          + str(round(dice_loss_value, 8))
-                          + "\tJaccardIndex: "
-                          + str(round(jaccard_value, 8)))
-
+                if math.isnan(jaccard_value.item()):
+                    jaccard_index.append(1.0)
                 else:
-                    print('Train Epoch: ' + str(epoch)
-                          + " batch_idx: "
-                          + str(batch_idx)
-                          + "\tLoss: "
-                          + str(round(np.average(train_losses[-log_interval]), 8))
-                          + "\tDiceLoss: "
-                          + str(round(np.average(dice_losses[-log_interval]), 8))
-                          + "\tJaccardIndex: "
-                          + str(round(np.average(jaccard_index[-log_interval]), 8)))
+                    jaccard_index.append(jaccard_value.item())
 
-        net.train(False)
+                if batch_idx % log_interval == 0:
+                    if batch_idx == 0:
+                        print('Train Epoch: ' + str(epoch)
+                            + " batch_idx: "
+                            + str(batch_idx)
+                            + "\tLoss: "
+                            + str(round(loss.item(), 8))
+                            + "\tDiceLoss: "
+                            + str(round(dice_losses[-1], 8))
+                            + "\tJaccardIndex: "
+                            + str(round(jaccard_index[-1], 8)))
+
+                    else:
+                        print('Train Epoch: ' + str(epoch)
+                            + " batch_idx: "
+                            + str(batch_idx)
+                            + "\tLoss: "
+                            + str(round(np.average(train_losses[-log_interval]), 8))
+                            + "\tDiceLoss: "
+                            + str(round(np.average(dice_losses[-log_interval]), 8))
+                            + "\tJaccardIndex: "
+                            + str(round(np.average(jaccard_index[-log_interval]), 8)))
+
+                count += 1
+                
+            ws.write(epoch+1, 0, 'epoch=' + str(epoch))
+            ws.write(epoch+1, 1, np.average(train_losses))
+            ws.write(epoch+1, 2, np.average(dice_losses))
+            ws.write(epoch+1, 3, np.average(jaccard_index))
+                        
+            val_loss, val_dice, val_jaccard = self.validation(epoch)
+            
+            ws1.write(epoch+1, 0, 'epoch=' + str(epoch))
+            ws1.write(epoch+1, 1, np.average(val_loss))
+            ws1.write(epoch+1, 2, np.average(val_dice))
+            ws1.write(epoch+1, 3, np.average(val_jaccard))
+            
+            wb.save('train_losses.xls')
+
+    def validation(self, epoch):
+        #validation
+        validation_loader = torch.utils.data.DataLoader(self.validationset, self.batch_size, shuffle=True)
+        valid_train_losses = []
+        valid_dice_losses = []
+        valid_jaccard_index = []
+
+        self.net.train(False)
         print('Validation')
         count = 0
         for batch_idx, (data, target) in enumerate(validation_loader):
-            if dev != "cpu":
-                data = data.to(dev)
-                target = target.to(dev)
+            if self.dev.type == 'cuda':
+                data = data.to(self.dev)
+                target = target.to(self.dev)
             data = data.float()
 
-            output = net(data)
-            loss = criterion(output, target)
-            dice_loss_value, jaccard_value = metrics.binary_classification(output, target)
-
+            output = self.net(data)
+            loss = self.criterion(output, target)
+            dice_loss_value = self.Dice(output, target.int())
+            jaccard_value = self.Jaccard(output, target.int())
             valid_train_losses.append(loss.item())
-            valid_dice_losses.append(dice_loss_value)
-            valid_jaccard_index.append(jaccard_value)
+            valid_dice_losses.append(dice_loss_value.item())
+            if math.isnan(jaccard_value.item()):
+                valid_jaccard_index.append(1.0)
+            else:
+                valid_jaccard_index.append(jaccard_value.item())
 
             if (count % 10 == 0):
                 if count == 0:
@@ -103,69 +176,10 @@ def train(dev, n_epoch, batch_size, lr, trainset, validationset, net):
                           + ' Valid JaccardIndex: ' + str(round(np.average(valid_jaccard_index[-10]), 8)))
 
             count += 1
-
-    plt.figure(1)
-    plt.plot(dice_losses)
-    plt.savefig('dice_losses.jpg')
-    plt.figure(2)
-    plt.plot(train_losses)
-    plt.savefig('train_losses.jpg')
-
-
-def test(device, batch_size, testset, net):
-    loc = ("C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1")
-    # To open Workbook
-    wb = xlwt.Workbook()
-    ws = wb.add_sheet('sheet')
-    ws.write(0, 0, 'Valid loss')
-    ws.write(0, 1, 'Value')
-
-    test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False)
-    criterion = nn.BCELoss()
-
-    print('test' + '\n')
-    test_losses = []
-    test_dice_losses = []
-    test_jaccard = []
-    net.train(False)
-    count = 0
-
-    with torch.no_grad():
-        for data, target in test_loader:
-            if dev != "cpu":
-                data = data.to(dev)
-                target = target.to(dev)
-
-            data = data.float()
-
-            output = net(data)
-            # pred = torch.argmax(output.data, dim = 1).unsqueeze(1).float()
-            loss = criterion(output, target)
-            dice_loss_value, jaccard_value = metrics.binary_classification(output, target)
-
-            test_losses.append(loss.item())
-            test_dice_losses.append(dice_loss_value)
-            test_jaccard.append(jaccard_value)
-
-            if (count % 10 == 0):
-                if count == 0:
-                    print('Valid Loss: ' + str(round(test_losses[0], 8)))
-                    print('Valid DiceLoss: ' + str(round(test_dice_losses[0], 8)))
-                    print('Valid JaccardIndex: ' + str(round(test_jaccard[0], 8)))
-
-                else:
-                    print('Valid Loss: ' + str(round(np.average(test_losses[-5]), 8)))
-                    print('Valid DiceLoss: ' + str(round(np.average(test_dice_losses[-5]), 8)))
-                    print('Valid JaccardIndex: ' + str(round(np.average(test_jaccard[-5]), 8)))
-
-            ws.write(count + 1, 0, 'count =' + str(count))
-            ws.write(count + 1, 1, test_losses[-1])
-            ws.write(count + 1, 2, test_dice_losses[-1])
-            ws.write(count + 1, 3, test_jaccard[-1])
-
-            count += 1
-
-    ws.write(count + 5, 1, np.average(test_losses))
-    ws.write(count + 5, 2, np.average(test_dice_losses))
-    ws.write(count + 5, 3, np.average(test_jaccard))
-
+    
+        return valid_train_losses, valid_dice_losses, valid_jaccard_index
+            
+    def run(self):
+        epoch=self.n_epoch
+        self.train()
+        return self.net
