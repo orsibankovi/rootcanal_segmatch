@@ -54,13 +54,12 @@ if __name__ == '__main__':
         net = net.to(dev)
     else:
         net = net.float()
-        
-    Train = train.Train(dev=dev, n_epoch=12, batch_size=4, lr=0.001, trainset=train_set, validationset=validation_set, net=net)
-    trained_net = Train.run()
+    
+    Train = train.Train(dev=dev, n_epoch=20, batch_size=4, lr=0.001, net=net)
+    trained_net = Train.run(trainset=train_set, validationset=validation_set, net=net)
     Test = test.Test(dev=dev, batch_size=1, testset=test_set, net=trained_net)
     Test.run()
     input_image = Image.open('./fogak/segmentation/original/CBCT 7d_100_239_original.png')
     target_image = Image.open('./fogak/segmentation/inverse/CBCT 7d_100_239_rootcanal.png')
     save_images(input_image, target_image, 'CBCT_7d_100_239_', trained_net)
-    torch.save(trained_net, 'trained_net.pt')
 

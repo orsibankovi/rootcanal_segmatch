@@ -2,6 +2,7 @@ import cv2
 from natsort import natsorted
 import os
 import numpy as np
+import xlwt
 
 
 def getoriginalfiles(path):
@@ -129,6 +130,14 @@ def original_with_root_canal(path):
         images.append(img_temp)
     return images
 
+def count_white_pixels(img):
+    count = 0
+    for i in range(img.shape[0]):
+        for j in range(img.shape[1]):
+            if img[i][j] == 255:
+                count += 1
+    return count
+
 
 def match_original(images_rootcanal, images):
     diffs = []
@@ -155,7 +164,7 @@ def calculate_start(e):
     return m
 
 
-def process(path, name):
+def process(path, name, sheet, count):
     os.chdir(path)
     original_images = getoriginalfiles(path)
     # bins = bin_mixedmap(path)
@@ -174,43 +183,55 @@ def process(path, name):
     print(s - 1)
     print(len(img_root))
 
-    target_path = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/segmentation/'
+    target_path = 'c:/Users/orsolya.bankovi/Documents/uni/rootcanal_segmatch/fogak/segmentation/'
     os.chdir(target_path)
 
     for j in range(len(original_images)):
         if s <= j < s + len(img_root):
             cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
             # cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(bins[j]))
-            # cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", cv2.bitwise_not(floodfill(bins[j])))
-            cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(binaris[j-s]))
-            cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", cv2.bitwise_not(floodfill(binaris[j-s])))
+            # cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(binaris[j-s]))
+            inverse = cv2.bitwise_not(floodfill(binaris[j-s]))
+            cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", inverse)
+            sheet.write(count, 0, '/fogak/' + name + "/" + str(j + 1) + "_" + ".png")
+            sheet.write(count, 1, '/fogak/segmentation/inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png")
+            sheet.write(count, 2, count_white_pixels(inverse))
+            count += 1
 
-        elif s - 100 < j < s + len(img_root) + 100:
+        elif s - 50 < j < s + len(img_root) + 50:
             cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
-            black = np.zeros(original_images[j].shape)
-            cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", black)
-            cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", black)
-'''
-        else:
-            cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
-            black = np.zeros(original_images[j].shape)
-            cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", black)
-            cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", black)
-'''
+            inverse = np.zeros(original_images[j].shape)
+            #cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", black)
+            cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", inverse)
+            sheet.write(count, 0, '/fogak/' + name + "/" + str(j + 1) + "_" + ".png")
+            sheet.write(count, 1, '/fogak/segmentation/inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png")
+            sheet.write(count, 2, count_white_pixels(inverse))
+            count += 1     
+    return count
+        
+            
     # cv2.imshow('MixedMap', NumberOfHoles(bins[146]))
     # cv2.imshow('Original', original_images[146])
     # cv2.imshow('FloodFill', cv2.bitwise_not(floodfill(bins[146])))
     # cv2.waitKey(0)
 
-
 if __name__ == '__main__':
-    rootdir = 'C:/Users/banko/Desktop/BME_VIK/I_felev/onlab1/fogak/'
+    rootdir = 'c:/Users/orsolya.bankovi/Documents/uni/rootcanal_segmatch/fogak'
+    ws = xlwt.Workbook()
+    sheet = ws.add_sheet('Images')
+    sheet.write(0, 0, 'Original')
+    sheet.write(0, 1, 'Rootcanal')
+    sheet.write(0, 2, 'Number of white pixels')
 
     dirs = [[]]
+    count = 1
     for subdir, dir_, files in os.walk(rootdir):
         dirs.append(dir_)
     # print(dirs[1])
     for i in dirs[1]:
         if i != 'segmentation_rootcanal_only' and i != 'segmentation' and i != 'segmentation_all':
             Path = rootdir + '/' + i + '/'
-            process(Path, i)
+            count = process(Path, i, sheet, count)
+            
+    ws.save('c:/Users/orsolya.bankovi/Documents/uni/rootcanal_segmatch/fogak/segmentation/' + 'summary' + '.xls')
+
