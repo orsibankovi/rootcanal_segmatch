@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 
 class UNet(nn.Module):
-    def __init__(self, in_channels=1, out_channels=1, init_features=32):
+    def __init__(self, in_channels=1, out_channels=1, init_features=64):
         super(UNet, self).__init__()
 
         features = init_features
@@ -74,6 +74,7 @@ class UNet(nn.Module):
                   nn.Conv2d(in_channels=features, out_channels=features, kernel_size=3, padding=1, bias=False, ),),
                  (name + "norm2", nn.BatchNorm2d(num_features=features)),
                  (name + "relu2", nn.ReLU(inplace=True)),
+                 #TODO: batchnormot fel kene cserelni a reluval
                  ]
             )
         )

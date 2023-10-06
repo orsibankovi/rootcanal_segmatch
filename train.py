@@ -12,19 +12,16 @@ import math
 
 
 class Train():
-    def __init__(self, dev, n_epoch, batch_size, lr, trainset, validationset, net):
+    def __init__(self, dev, n_epoch, batch_size, lr, net):
         super(Train, self).__init__()
         self.dev = dev
         self.n_epoch = n_epoch
         self.batch_size = batch_size
         self.lr = lr
-        self.trainset = trainset
-        self.validationset = validationset
-        self.net = net
         self.Dice = torchmetrics.Dice(zero_division=1.0, threshold=0.5).to(self.dev)
         self.Jaccard = torchmetrics.JaccardIndex(task='binary', threshold=0.5).to(self.dev) 
         self.criterion = nn.BCELoss().to(self.dev)
-        self.optimizer = optim.Adam(self.net.parameters(), self.lr)
+        self.optimizer = optim.Adam(net.parameters(), self.lr)
         
     def plot_loss(self, train_loss, valid_loss, n_epochs, name, num):
         plt.figure(num)
@@ -33,22 +30,12 @@ class Train():
         plt.xlim((0, n_epochs))
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
-        plt.savefig(name+'.jpg')
+        plt.savefig(name+'.jpg')  
         
-    def avg_loss_epoch(self, array, trainlen, batchsize, epochnum):
-        avg_array = []
-        for i in range(1,epochnum+1):
-            avg_array.append(np.average(array[(i-1)*int(trainlen):i*int(trainlen)]))
-
-        return avg_array    
-        
-    def train(self):
+    def train(self, trainset, validationset, net):
         log_interval = 500
-        train_loader = torch.utils.data.DataLoader(self.trainset, self.batch_size, shuffle=True)
-        val_losses = []
-        val_dice_losses = []
-        val_jaccard_index = []
-        self.net.train(True)
+        train_loader = torch.utils.data.DataLoader(trainset, self.batch_size, shuffle=True)
+        net.train(True)
         count = 0
         wb = xlwt.Workbook()
         ws = wb.add_sheet('Train')
@@ -61,6 +48,8 @@ class Train():
         ws1.write(0, 1, 'Loss')
         ws1.write(0, 2, 'DiceLoss')
         ws1.write(0, 3, 'JaccardIndex')
+        
+        best_jaccard = 0.0
 
         # train
         print('train')
@@ -79,7 +68,7 @@ class Train():
             
                 self.optimizer.zero_grad()  # clear the gradient
 
-                output = self.net(data)  # forward propagation
+                output = net(data)  # forward propagation
                 loss = self.criterion(output, target)  # calculate loss
                 
                 loss.backward()  # current loss
@@ -125,23 +114,30 @@ class Train():
             ws.write(epoch+1, 2, np.average(dice_losses))
             ws.write(epoch+1, 3, np.average(jaccard_index))
                         
-            val_loss, val_dice, val_jaccard = self.validation(epoch)
+            val_loss, val_dice, val_jaccard = self.validation(epoch, net, validationset)
             
             ws1.write(epoch+1, 0, 'epoch=' + str(epoch))
             ws1.write(epoch+1, 1, np.average(val_loss))
             ws1.write(epoch+1, 2, np.average(val_dice))
             ws1.write(epoch+1, 3, np.average(val_jaccard))
             
-            wb.save('train_losses.xls')
+            if best_jaccard < np.average(val_jaccard):
+                best_jaccard = np.average(val_jaccard)
+                print('AZ EDDIGI LEGJOBB JACCARD A ' + str(epoch) + '. EPOCHBAN: ' + str(best_jaccard))
+                torch.save(net, 'trained_net.pt')
+            
+        wb.save('train_losses.xls')
+        
+        return net
 
-    def validation(self, epoch):
+    def validation(self, epoch, net, validationset):
         #validation
-        validation_loader = torch.utils.data.DataLoader(self.validationset, self.batch_size, shuffle=True)
+        validation_loader = torch.utils.data.DataLoader(validationset, self.batch_size, shuffle=True)
         valid_train_losses = []
         valid_dice_losses = []
         valid_jaccard_index = []
 
-        self.net.train(False)
+        net.train(False)
         print('Validation')
         count = 0
         for batch_idx, (data, target) in enumerate(validation_loader):
@@ -150,7 +146,7 @@ class Train():
                 target = target.to(self.dev)
             data = data.float()
 
-            output = self.net(data)
+            output = net(data)
             loss = self.criterion(output, target)
             dice_loss_value = self.Dice(output, target.int())
             jaccard_value = self.Jaccard(output, target.int())
@@ -161,7 +157,7 @@ class Train():
             else:
                 valid_jaccard_index.append(jaccard_value.item())
 
-            if (count % 10 == 0):
+            if (count % 100 == 0):
                 if count == 0:
                     print('Train Epoch: ' + str(epoch)
                           + " batch_idx: " + str(batch_idx)
@@ -179,7 +175,6 @@ class Train():
     
         return valid_train_losses, valid_dice_losses, valid_jaccard_index
             
-    def run(self):
-        epoch=self.n_epoch
-        self.train()
-        return self.net
+    def run(self, trainset, validationset, net):
+        net = self.train(trainset, validationset, net)
+        return net
