@@ -3,12 +3,14 @@ import numpy as np
 from PIL import Image
 import get_dataset as ds
 import unet
+import deeplabv3
 import torchvision
 from torchvision import transforms
 import metrics
 import train
 import test
 import os
+from natsort import natsorted
 os.environ['CUDNN_BACKEND'] = 'tegra'
 
 preprocess_input = transforms.Compose([
@@ -21,7 +23,7 @@ preprocess_target = transforms.Compose([
                       transforms.ToTensor(),
             ])
 
-def save_images(input_image, target_image, des_filename, net):
+def save_images(input_image, target_image, des_filename, net, k):
     target_tensor = preprocess_target(target_image).to(dev).unsqueeze(1).float()
     input_tensor = preprocess_input(input_image).float()
     input_tensor = input_tensor.to(dev).float()
@@ -32,34 +34,65 @@ def save_images(input_image, target_image, des_filename, net):
     transform = torchvision.transforms.ToPILImage()
     image = transform(output_th)
     # tf = transform(tf_tn_img)
-    tf_tn_img.save(des_filename + 'tf_tn_img' +  '.png')
-    image.save(des_filename + 'unet_result' + '.png')
+    tf_tn_img.save('./results/' + k + '/visualization/tf_tn/' + des_filename + '.png')
+    image.save('./results/' + k + './visualization/unet_result/' + des_filename + '.png')
 
 
 if __name__ == '__main__':
     dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    #dev = torch.device("cpu")
+    k = 'k_7'
     print(dev)
-    dataset=ds.GetDataset()
-    train_len = int(len(dataset)*0.9)
-    train_set, test_set = torch.utils.data.random_split(dataset, [train_len, len(dataset)-train_len])
-    torch.save(train_set, 'train_set.pt')
-    validation_len = int(len(test_set)*0.5)
-    validation_set, test_set = torch.utils.data.random_split(test_set, [validation_len, len(test_set)-validation_len])
-    torch.save(test_set, 'test_set.pt')
-    torch.save(validation_set, 'validation_set.pt')
+    '''
+    train_dataset=ds.GetDataset(input_path='./fogak/segmentation/kfold/' + k + '/train/original', 
+                                target_path='./fogak/segmentation/kfold/' + k + '/train/inverse', 
+                                bool_augmentation=True)
+                                '''
+    #print('train_dataset: ', len(train_dataset))
+    #train_len = int(len(train_dataset)*0.98)
+    #train_set, validation_set = torch.utils.data.random_split(train_dataset, [train_len, len(train_dataset)-train_len])
+    test_set=ds.GetDataset(input_path='./fogak/segmentation_rootcanal_only/original', 
+                            target_path='./fogak/segmentation_rootcanal_only/inverse', 
+                            bool_augmentation=False)
+    print('test_dataset: ', len(test_set))
 
     net = unet.UNet(1, 1)
-
+    
+    net = torch.load('./trained_net.pt', map_location=dev)
+    #train_set = torch.load('./finetune_after24epoch/train_set.pt')
+    #validation_set = torch.load('./finetune_after24epoch/validation_set.pt')
+    #net = deeplabv3.deeplabv3_resnet50(num_classes=2)
+    
     if dev.type == 'cuda':
         net = net.to(dev)
     else:
-        net = net.float()
+        net = net.to(dev).float()
     
-    Train = train.Train(dev=dev, n_epoch=20, batch_size=4, lr=0.001, net=net)
-    trained_net = Train.run(trainset=train_set, validationset=validation_set, net=net)
-    Test = test.Test(dev=dev, batch_size=1, testset=test_set, net=trained_net)
+    #Train = train.Train(dev=dev, n_epoch=20, batch_size=8, lr=0.001, net=net, k=k)
+    #trained_net = Train.run(trainset=train_set, validationset=validation_set, net=net)
+    #torch.save(trained_net, './results/' + k + '/finished_trained_net.pt')
+    dev = torch.device("cpu")
+    net = net.to(dev)
+    Test = test.Test(dev=dev, batch_size=1, testset=test_set, net=net, k=k)
     Test.run()
-    input_image = Image.open('./fogak/segmentation/original/CBCT 7d_100_239_original.png')
-    target_image = Image.open('./fogak/segmentation/inverse/CBCT 7d_100_239_rootcanal.png')
-    save_images(input_image, target_image, 'CBCT_7d_100_239_', trained_net)
+
+    '''
+    #net = torch.load('./results/' + k + '/trained_net.pt')
+    dev = torch.device("cpu")
+    net = net.to(dev)
+    original = './fogak/segmentation_rootcanal_only/original'
+    orig_filenames = list(os.listdir(original))
+    orig_png_filenames = list(filter(lambda x: x.endswith(".png"), orig_filenames))
+    orig_png_filenames = natsorted(orig_png_filenames)
+    inverse = './fogak/segmentation/kfold/' + k + '/test/inverse'
+    inv_filenames = list(os.listdir(inverse))
+    inv_png_filenames = list(filter(lambda x: x.endswith(".png"), inv_filenames))
+    inv_png_filenames = natsorted(inv_png_filenames)
+    for i in range(len(orig_png_filenames)):
+        input_image = Image.open(f'./fogak/segmentation/kfold/k_7/test/original/{orig_png_filenames[i]}')
+        target_image = Image.open(f'./fogak/segmentation/kfold/k_7/test/inverse/{inv_png_filenames[i]}')
+        input_filename = orig_png_filenames[i].split('.')[0]  # Extract the filename without the extension
+        target_filename = inv_png_filenames[i].split('.')[0]
+        save_images(input_image, target_image, input_filename, net, k)
+        '''
 

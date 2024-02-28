@@ -75,22 +75,19 @@ def bin_mixedmap(path):
     return mixedmap
 
 
-def convexhull(img, contour):
-    if not cv2.isContourConvex(contour):
-        convex_hull = cv2.convexHull(contour)
-        cv2.drawContours(img, [convex_hull], 0, (255, 255, 255), 0)
+def convexhull(img, contour, hierarchy):
+    for c, h in zip(contour, hierarchy[0]):
+        if h[2] != -1:
+            convex_hull = cv2.convexHull(c)
+            cv2.drawContours(img, [convex_hull], 0, (255, 255, 255), thickness=cv2.FILLED)
 
     return img
 
 
 def number_of_holes(img):
     contours, hierarchy = cv2.findContours(img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-    # print(type(hierarchy))
-    if type(hierarchy) == 'numpy.ndarray':
-        for c, h in zip(contours, hierarchy[0]):
-            # If there is at least one interior contour, find out how many there are
-            if h[2] == -1:
-                img = convexhull(img, c)
+    if isinstance(hierarchy, np.ndarray):
+        img = convexhull(img, contours, hierarchy)
     return img
 
 
@@ -183,7 +180,7 @@ def process(path, name, sheet, count):
     print(s - 1)
     print(len(img_root))
 
-    target_path = 'c:/Users/orsolya.bankovi/Documents/uni/rootcanal_segmatch/fogak/segmentation/'
+    target_path = 'c:/Users/orsolya.bankovi/Documents/uni/rootcanal_segmatch/all/'
     os.chdir(target_path)
 
     for j in range(len(original_images)):
@@ -193,18 +190,18 @@ def process(path, name, sheet, count):
             # cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", number_of_holes(binaris[j-s]))
             inverse = cv2.bitwise_not(floodfill(binaris[j-s]))
             cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", inverse)
-            sheet.write(count, 0, '/fogak/' + name + "/" + str(j + 1) + "_" + ".png")
-            sheet.write(count, 1, '/fogak/segmentation/inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png")
+            sheet.write(count, 0, '/all/' + name + "/" + str(j + 1) + "_" + ".png")
+            sheet.write(count, 1, '/all/inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png")
             sheet.write(count, 2, count_white_pixels(inverse))
             count += 1
 
-        elif s - 50 < j < s + len(img_root) + 50:
+        elif j % 5 == 0:
             cv2.imwrite(target_path + 'original/' + name + "_" + str(j + 1) + "_" + "original.png", original_images[j])
             inverse = np.zeros(original_images[j].shape)
             #cv2.imwrite(target_path + 'binary/' + name + "_" + str(j + 1) + "_" + "binary.png", black)
             cv2.imwrite(target_path + 'inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png", inverse)
-            sheet.write(count, 0, '/fogak/' + name + "/" + str(j + 1) + "_" + ".png")
-            sheet.write(count, 1, '/fogak/segmentation/inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png")
+            sheet.write(count, 0, '/all/' + name + "/" + str(j + 1) + "_" + ".png")
+            sheet.write(count, 1, '/all/inverse/' + name + "_" + str(j + 1) + "_" + "rootcanal.png")
             sheet.write(count, 2, count_white_pixels(inverse))
             count += 1     
     return count
@@ -227,7 +224,6 @@ if __name__ == '__main__':
     count = 1
     for subdir, dir_, files in os.walk(rootdir):
         dirs.append(dir_)
-    # print(dirs[1])
     for i in dirs[1]:
         if i != 'segmentation_rootcanal_only' and i != 'segmentation' and i != 'segmentation_all':
             Path = rootdir + '/' + i + '/'

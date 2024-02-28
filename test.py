@@ -11,7 +11,7 @@ import torchmetrics
 import metrics
 
 class Test():
-    def __init__(self, dev, batch_size, testset, net):
+    def __init__(self, dev, batch_size, testset, net, k):
         super(Test, self).__init__()
         self.dev = dev
         self.batch_size = batch_size
@@ -20,13 +20,17 @@ class Test():
         self.Dice = torchmetrics.Dice(zero_division=1.0, threshold=0.5).to(self.dev)
         self.Jaccard = torchmetrics.JaccardIndex(task='binary', threshold=0.5).to(self.dev) 
         self.criterion = nn.BCELoss().to(self.dev)
+        self.k = k
         
     def test(self):
         # To open Workbook
         wb = xlwt.Workbook()
         ws = wb.add_sheet('sheet')
-        ws.write(0, 0, 'Valid loss')
-        ws.write(0, 1, 'Value')
+        ws.write(0, 1, 'Valid loss')
+        ws.write(0, 2, 'Dice loss')
+        ws.write(0, 3, 'Jaccard index')
+        ws.write(0, 4, 'Euclidean dist')
+        ws.write(0, 5, 'num of canal')
 
         test_loader = torch.utils.data.DataLoader(self.testset, self.batch_size, shuffle=False)
         criterion = nn.BCELoss()
@@ -52,6 +56,22 @@ class Test():
                 
                 dice_loss_value = self.Dice(output, target.int())
                 jaccard_value = self.Jaccard(output, target.int())
+                #print(torch.max(output), torch.min(output))
+                x_output, y_output = metrics.center_of_canal(torch.round(output.cpu().data))
+                x_target, y_target = metrics.center_of_canal(target.cpu().int())
+                e = 0
+                if len(x_output) != 0 and len(x_target) != 0 and len(y_output) != 0 and len(y_target) != 0:
+                    num_of_canal = len(x_output) if len(x_output) < len(x_target) else len(x_target)
+                    min = 10000
+                    for i in range(len(x_output)):
+                        for j in range(len(x_target)):
+                            dist = math.sqrt((x_output[i]-x_target[j])**2 + (y_output[i]-y_target[j])**2)
+                            if dist < min:
+                                min = dist
+        
+                    e += min
+                else:
+                    e = 'nan'
                 test_losses.append(loss.item())
                 test_dice_losses.append(dice_loss_value.item())
                 if math.isnan(jaccard_value.item()):
@@ -67,20 +87,24 @@ class Test():
                     tpr.append(np.asarray(tpr_.cpu()))
 
                 if (count%10 == 0):
-                    if count == 0:
-                        print('Test Loss: ' + str(round(test_losses[0], 8)))
-                        print('Test DiceLoss: ' + str(round(test_dice_losses[0], 8)))
-                        print('Test JaccardIndex: ' + str(round(test_jaccard[0], 8)))
+                    print('Test Loss: ' + str(round(test_losses[-1], 8)))
+                    print('Test DiceLoss: ' + str(round(test_dice_losses[-1], 8)))
+                    print('Test JaccardIndex: ' + str(round(test_jaccard[-1], 8)))
+                    print('Euclidean distance: ' + str(e))
 
-                    else:
-                        print('Test Loss: ' + str(round(np.average(test_losses[-5]), 8)))
-                        print('Test DiceLoss: ' + str(round(np.average(test_dice_losses[-5]), 8)))
-                        print('Test JaccardIndex: ' + str(round(np.average(test_jaccard[-5]), 8)))
 
                 ws.write(count+1, 0, 'count =' + str(count))
                 ws.write(count+1, 1, test_losses[-1])
                 ws.write(count+1, 2, test_dice_losses[-1])
                 ws.write(count+1, 3, test_jaccard[-1])
+                if e != 'nan':
+                    ws.write(count+1, 4, e)
+                    ws.write(count+1, 5, num_of_canal)
+                    ws.write(count+1, 6, x_output[0])
+                    ws.write(count+1, 7, y_output[0]) 
+                    ws.write(count+1, 8, x_target[0])
+                    ws.write(count+1, 9, y_target[0])
+                print(str(count/len(test_loader)))
 
                 count += 1
                 
@@ -94,7 +118,7 @@ class Test():
         fpr_avg = np.average(np.asarray(fpr), axis=0)
         tpr_avg = np.average(np.asarray(tpr), axis=0)
         
-        wb.save('test_losses.xls')
+        wb.save('./test_results.xls')
         
         plt.figure(7)
         auc=np.trapz(tpr_avg, x=fpr_avg, dx=0.01)
@@ -105,7 +129,7 @@ class Test():
         plt.ylabel('TPR', fontsize=16)
         plt.xlabel('FPR', fontsize=16)
         plt.legend(fontsize=12, loc='lower right')
-        plt.savefig('ROC_AUC.jpg')
+        plt.savefig('./ROC.png')
                 
     def run(self):
         self.test()

@@ -12,7 +12,7 @@ import math
 
 
 class Train():
-    def __init__(self, dev, n_epoch, batch_size, lr, net):
+    def __init__(self, dev, n_epoch, batch_size, lr, net, k):
         super(Train, self).__init__()
         self.dev = dev
         self.n_epoch = n_epoch
@@ -22,6 +22,7 @@ class Train():
         self.Jaccard = torchmetrics.JaccardIndex(task='binary', threshold=0.5).to(self.dev) 
         self.criterion = nn.BCELoss().to(self.dev)
         self.optimizer = optim.Adam(net.parameters(), self.lr)
+        self.k = k
         
     def plot_loss(self, train_loss, valid_loss, n_epochs, name, num):
         plt.figure(num)
@@ -85,18 +86,7 @@ class Train():
                     jaccard_index.append(jaccard_value.item())
 
                 if batch_idx % log_interval == 0:
-                    if batch_idx == 0:
-                        print('Train Epoch: ' + str(epoch)
-                            + " batch_idx: "
-                            + str(batch_idx)
-                            + "\tLoss: "
-                            + str(round(loss.item(), 8))
-                            + "\tDiceLoss: "
-                            + str(round(dice_losses[-1], 8))
-                            + "\tJaccardIndex: "
-                            + str(round(jaccard_index[-1], 8)))
-
-                    else:
+                    if batch_idx != 0:
                         print('Train Epoch: ' + str(epoch)
                             + " batch_idx: "
                             + str(batch_idx)
@@ -124,9 +114,10 @@ class Train():
             if best_jaccard < np.average(val_jaccard):
                 best_jaccard = np.average(val_jaccard)
                 print('AZ EDDIGI LEGJOBB JACCARD A ' + str(epoch) + '. EPOCHBAN: ' + str(best_jaccard))
-                torch.save(net, 'trained_net.pt')
+                torch.save(net, './results/' + self.k +  '/trained_net.pt')
+            print('Act jaccard: ' + str(np.average(val_jaccard)))
             
-        wb.save('train_losses.xls')
+        wb.save('./results/' + self.k + '/train_result.xls')
         
         return net
 
