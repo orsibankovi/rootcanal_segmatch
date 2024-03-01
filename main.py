@@ -1,13 +1,11 @@
 import torch
-import numpy as np
-from PIL import Image
-import get_dataset as ds
-import unet
-import deeplabv3
+
+import preprocess.get_dataset as ds
+from models import unet, deeplabv3
 import torchvision
 from torchvision import transforms
-import metrics
-import train
+from tests import test, metrics
+from train import train
 import test
 import os
 from natsort import natsorted

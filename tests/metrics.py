@@ -1,33 +1,9 @@
-import os
 import cv2
 import torch
 from PIL import Image
 import math
 import numpy as np
-from sklearn import metrics
-from torch.utils.data import Dataset
-import numpy as np
-import torch.nn as nn
-import torch.optim as optim
-import matplotlib.pyplot as plt
-import get_dataset as ds
-
-class DiceBCELoss(nn.Module):
-    def __init__(self, weight=None, size_average=True):
-        super(DiceBCELoss, self).__init__()
-
-    def forward(self, inputs, targets, smooth=1):    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-        
-        intersection = (inputs * targets).sum()                            
-        dice_loss = 1 - (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
-        BCE = nn.BCELoss(inputs, targets, reduction='mean')
-        Dice_BCE = BCE + dice_loss
-        
-        return Dice_BCE
-
+from torch import Tensor
 
 def binary(output, threshold=0.5):
     binary = output > threshold
@@ -67,7 +43,7 @@ def find_center(contour):
     else:
         return None, None
 
-def center_of_canal(tensor):
+def center_of_canal(tensor: Tensor) -> tuple[list, list]:
     tensor = torch.squeeze(tensor, 0).numpy().transpose(1, 2, 0).astype(np.uint8)*255
     contours, _ = cv2.findContours(tensor, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     centers = [find_center(contour) for contour in contours]
@@ -75,3 +51,31 @@ def center_of_canal(tensor):
     Y = [center[1] for center in centers if center[1] is not None]
 
     return X, Y
+
+def centers_of_canals(output_tensor: Tensor, target_tensor: Tensor) -> float:
+    output_x, output_y = center_of_canal(output_tensor)
+    target_x, target_y = center_of_canal(target_tensor)
+
+    if len(output_x) != 0 and len(target_x) != 0:
+        distances = find_min_dist(output_x, target_x, output_y, target_y)
+    else:
+        distances = 'nan'
+
+    return distances
+
+def find_min_dist(output_x: list, target_x: list, output_y: list, target_y: list) -> float:
+    distances = []
+    shorter_x = min(output_x, target_x, key=len)
+    longer_x = max(output_x, target_x, key=len)
+    shorter_y = min(output_y, target_y, key=len)
+    longer_y = max(output_y, target_y, key=len)
+
+    for i in range(len(shorter_x)):
+        min_difference = -1
+        for j in range(len(longer_x)):
+            dist = math.sqrt((shorter_x[i] - longer_x[j])**2 + (shorter_y[i] - longer_y[j])**2)
+            if min_difference == -1 or dist < min_difference:
+                min_difference = dist
+        distances.append(min_difference)
+
+    return np.sum(distances) / len(distances)

@@ -3,7 +3,7 @@ import numpy as np
 from natsort import natsorted
 import os
 
-def process_image(input_path, output_path):
+def delete_single_white_pixels(input_path, output_path):
     # Olvassuk be a képet
     image = cv2.imread(input_path, cv2.IMREAD_GRAYSCALE)
 
@@ -45,4 +45,4 @@ if __name__ == "__main__":
         for png_files in sorted_filenames:
             path_png = path + '/' + png_files
             target_path = 'c:/Users/orsolya.bankovi/Documents/uni/rootcanal_segmatch/all/fuck/' + png_files
-            process_image(path_png, target_path)
+            delete_single_white_pixels(path_png, target_path)

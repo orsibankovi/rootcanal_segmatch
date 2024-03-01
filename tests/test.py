@@ -1,11 +1,8 @@
-import os
 import math
 import torch
 import xlwt
-from torch.utils.data import Dataset
 import numpy as np
 import torch.nn as nn
-import torch.optim as optim
 import matplotlib.pyplot as plt
 import torchmetrics
 import metrics
@@ -24,28 +21,17 @@ class Test():
         
     def test(self):
         # To open Workbook
-        wb = xlwt.Workbook()
-        ws = wb.add_sheet('sheet')
-        ws.write(0, 1, 'Valid loss')
-        ws.write(0, 2, 'Dice loss')
-        ws.write(0, 3, 'Jaccard index')
-        ws.write(0, 4, 'Euclidean dist')
-        ws.write(0, 5, 'num of canal')
+        wb, ws = self.create_excel()
 
         test_loader = torch.utils.data.DataLoader(self.testset, self.batch_size, shuffle=False)
         criterion = nn.BCELoss()
 
         print('test' + '\n')
-        test_losses = []
-        test_dice_losses = []
-        test_jaccard = []
+        test_losses, test_dice_losses, test_jaccard, fpr, tpr = [], [], [], [], []
         self.net.train(False)
-        count = 0
-        fpr = []
-        tpr = []
 
         with torch.no_grad():
-            for data, target in test_loader:
+            for i, (data, target) in enumerate(test_loader):
                 if self.dev.type == 'cuda':
                     data = data.to(self.dev)
                     target = target.to(self.dev)
@@ -56,64 +42,36 @@ class Test():
                 
                 dice_loss_value = self.Dice(output, target.int())
                 jaccard_value = self.Jaccard(output, target.int())
-                #print(torch.max(output), torch.min(output))
-                x_output, y_output = metrics.center_of_canal(torch.round(output.cpu().data))
-                x_target, y_target = metrics.center_of_canal(target.cpu().int())
-                e = 0
-                if len(x_output) != 0 and len(x_target) != 0 and len(y_output) != 0 and len(y_target) != 0:
-                    num_of_canal = len(x_output) if len(x_output) < len(x_target) else len(x_target)
-                    min = 10000
-                    for i in range(len(x_output)):
-                        for j in range(len(x_target)):
-                            dist = math.sqrt((x_output[i]-x_target[j])**2 + (y_output[i]-y_target[j])**2)
-                            if dist < min:
-                                min = dist
-        
-                    e += min
-                else:
-                    e = 'nan'
+
+                e = metrics.centers_of_canals(torch.round(output.cpu().data), target.cpu().int())
                 test_losses.append(loss.item())
                 test_dice_losses.append(dice_loss_value.item())
+
                 if math.isnan(jaccard_value.item()):
                     test_jaccard.append(1.0)
                 else:
                     test_jaccard.append(jaccard_value.item())
                     
                 roc = torchmetrics.ROC(task='binary', thresholds=100)
-                fpr_, tpr_, thresholds = roc(output, target.int())
+                fpr_, tpr_, _ = roc(output, target.int())
                     
                 if np.average(np.asarray(output.cpu().squeeze(1)))>0 and np.average(np.asarray(target.cpu().squeeze(1)))>0:
                     fpr.append(np.asarray(fpr_.cpu()))
                     tpr.append(np.asarray(tpr_.cpu()))
 
-                if (count%10 == 0):
+                if (i%50 == 0):
                     print('Test Loss: ' + str(round(test_losses[-1], 8)))
                     print('Test DiceLoss: ' + str(round(test_dice_losses[-1], 8)))
                     print('Test JaccardIndex: ' + str(round(test_jaccard[-1], 8)))
                     print('Euclidean distance: ' + str(e))
+                    print(str(i/len(test_loader)))
 
-
-                ws.write(count+1, 0, 'count =' + str(count))
-                ws.write(count+1, 1, test_losses[-1])
-                ws.write(count+1, 2, test_dice_losses[-1])
-                ws.write(count+1, 3, test_jaccard[-1])
-                if e != 'nan':
-                    ws.write(count+1, 4, e)
-                    ws.write(count+1, 5, num_of_canal)
-                    ws.write(count+1, 6, x_output[0])
-                    ws.write(count+1, 7, y_output[0]) 
-                    ws.write(count+1, 8, x_target[0])
-                    ws.write(count+1, 9, y_target[0])
-                print(str(count/len(test_loader)))
-
-                count += 1
+                self.write_excel(ws, i, test_losses[-1], test_dice_losses[-1], test_jaccard[-1], e)
                 
-        print(np.array(fpr).shape)
-        print(np.array(tpr).shape)
                 
-        ws.write(count+5, 1, np.average(test_losses))
-        ws.write(count+5, 2, np.average(test_dice_losses))
-        ws.write(count+5, 3, np.average(test_jaccard))
+        ws.write(i+5, 1, np.average(test_losses))
+        ws.write(i+5, 2, np.average(test_dice_losses))
+        ws.write(i+5, 3, np.average(test_jaccard))
         
         fpr_avg = np.average(np.asarray(fpr), axis=0)
         tpr_avg = np.average(np.asarray(tpr), axis=0)
@@ -133,3 +91,19 @@ class Test():
                 
     def run(self):
         self.test()
+
+    def create_excel(self) -> tuple:
+        wb = xlwt.Workbook()
+        ws = wb.add_sheet('sheet')
+        ws.write(0, 1, 'Valid loss')
+        ws.write(0, 2, 'Dice loss')
+        ws.write(0, 3, 'Jaccard index')
+        ws.write(0, 4, 'Euclidean dist')
+        return wb, ws
+    
+    def write_excel(self, ws, count, loss, dice_loss, jaccard, e) -> None:
+        ws.write(count+1, 1, loss)
+        ws.write(count+1, 2, dice_loss)
+        ws.write(count+1, 3, jaccard)
+        if e != 'nan':
+            ws.write(count+1, 4, e)
